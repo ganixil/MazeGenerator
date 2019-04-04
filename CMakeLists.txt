@@ -5,7 +5,7 @@ set(PROJECT_NAME
         )
 
 set(CMAKE_CXX_STANDARD 14)
-set(SOURCE_FILES main.cpp tinyfiledialogs.h tinyfiledialogs.c Line.cpp Line.h Point.h Point.cpp)
+set(SOURCE_FILES main.cpp tinyfiledialogs.h tinyfiledialogs.c Line.cpp Line.h Point.h Point.cpp Cell.h Cell.cpp)
 
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
 

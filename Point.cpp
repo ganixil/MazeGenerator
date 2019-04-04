@@ -5,12 +5,17 @@
 CPoint::CPoint()
 {}
 
-CPoint::CPoint(float x, float y)
+CPoint::CPoint(int x, int y)
 {
 	this->x = x;
 	this->y = y;
 }
-
+CPoint::CPoint(int x, int y)
+{
+	this->x = x;
+	this->y = y;
+	this->visited = visited;
+}
 CPoint::~CPoint()
 {}
 

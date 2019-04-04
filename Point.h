@@ -7,9 +7,11 @@
 class CPoint
 {
 public:
-	float x, y;
+	int x, y;
+	int visited;
 	CPoint();
-	CPoint(float x, float y);
+	CPoint(int x, int y);
+	CPoint(int x, int y, int visited);
 	~CPoint();
 	CPoint& operator+(CPoint &);
 	CPoint& operator-(CPoint &);

@@ -13,6 +13,7 @@ using namespace std;
 #include "tinyfiledialogs.h"
 #include "Point.h"
 #include "Line.h"
+#include "Cell.h"
 
 
 
@@ -28,11 +29,15 @@ int lmbDown = 0;
 int rmbDown = 0;
 
 float oldPos[2], newPos[2];
-
+float worldPos[2];
 // vertex and line list
 vector<CPoint> vPts;
 vector<CLine> vLines;
 CPoint tmpPts[2];
+int winpoints[2];
+
+vector<CPoint> visited;
+vector<CPoint> ptstack;
 
 // keep track of the active anchor
 int hover = -1, dragging = -1;
@@ -40,30 +45,114 @@ char keypress = NULL;
 
 
 /* ************************************************ */
+
 void init( void )
 {
     // set background to white
     glClearColor(1.0, 1.0, 1.0, 0.0);
 
     glMatrixMode (GL_PROJECTION);
-    gluOrtho2D(-1.0, 1.0, -1.0, 1.0);
+    glLoadIdentity();
+    gluOrtho2D(0,winWidth, 0, winHeight);
     glMatrixMode (GL_MODELVIEW);
 }
 
-// windows position -> world coordinate conversion
-void win2world(float* worldpos, int x, int y)
-{
-    worldpos[0] = (float)x / winWidth * 2 - 1.0;
-    worldpos[1] =1.0 - (float)y / winHeight * 2;
+void getPixel(int x, int y, GLfloat *color){
+    glReadPixels(x,y,1,1,GL_RGB,GL_FLOAT,color);
 }
 
+vector<int> check_surrending(int x, int y){
+    vector<int> unvisited;
+    int up=1, down=2, left=3, right=4;
+    GLfloat rgb[3];
+    //up
+    getPixel(x,y+8,rgb);
+    if(rgb[0] == 0.0 && rgb[1] == 0.0 && rgb[2] == 0.0){
+        unvisited.push_back(up);
+    }
+    //down
+    getPixel(x,y-8,rgb);
+    if(rgb[0] == 0.0 && rgb[1] == 0.0 && rgb[2] == 0.0){
+        unvisited.push_back(down);
+    }
+    //left
+    getPixel(x-8,y,rgb);
+    if(rgb[0] == 0.0 && rgb[1] == 0.0 && rgb[2] == 0.0){
+        unvisited.push_back(left);
+    }
+    //right
+    getPixel(x+8,y,rgb);
+    if(rgb[0] == 0.0 && rgb[1] == 0.0 && rgb[2] == 0.0){
+        unvisited.push_back(right);
+    }
+}
+void drawMaze(CPoint start, vector<CPoint> cells, int offset){
+
+    glColor3f(0.0,0.0,0.0);
+    glPointSize(8.0);
+    glBegin(GL_POINTS);
+    glVertex2f(start.x,start.y);
+    glEnd();
+
+    for(auto p: cells){
+        if(p.x == start.x && p.y == start.y){
+            p.visited = 1;
+        }
+    }
+    CPoint top;
+    CPoint down;
+    CPoint left;
+    CPoint right;
+    for(auto p: cells){
+        //top
+        if(p.x == start.x && p.y == (start.y) + offset){
+            top = p;
+        }
+        //down
+        if(p.x == start.x && p.y == (start.y) - offset){
+            down = p;
+        }
+        //left
+        if(p.x == (start.x)-offset && p.y == start.y){
+            left = p;
+        }
+        //right
+        if(p.x == (start.x)+offset && p.y == start.y){
+            right = p;
+        }
+    }
+    vector<CPoint> fourdir;
+    fourdir.push_back(top);
+    fourdir.push_back(down);
+    fourdir.push_back(left);
+    fourdir.push_back(right);
+
+    vector<CPoint> notvisited;
+    for(auto pt: fourdir){
+        if(pt.visited == 0)
+            notvisited.push_back(pt);
+    }
+    //random number
+    if(!notvisited.empty()){
+        int dir = rand() % (int)(notvisited.size());
+    } else if(!ptstack.empty()){
+
+    }
+
+
+
+
+
+
+
+
+}
 // Main drawing routine. Called repeatedly by GLUT's main loop
 void display( void )
 {
     //Clear the screen and set our initial view matrix
     glClear(GL_COLOR_BUFFER_BIT);
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
+
 
     switch(keypress){
         case 'n':
@@ -76,47 +165,26 @@ void display( void )
                     0);
             keypress = NULL;
     }
-    glPointSize(7.0);
-    for (int i=0; i<vPts.size(); i++)
-    {
-        // set anchor color according to its state
-        if (i == dragging)
-        {
-            glColor3f(1.0, 0.0, 0.0);
-        }
-        else if (i == hover)
-        {
-            glColor3f(0.6, 0.6, 0.0);
-        }
-        else
-        {
-            glColor3f(0.0, 1.0, 0.0);
-        }
-        glBegin(GL_POINTS);
-        glVertex2f(vPts[i].x, vPts[i].y);
-        glEnd();
-    }
-
     for (int i=0; i<vLines.size(); i++)
     {
         // draw lines
         glColor3f(0.0, 0.0, 0.0);
+        glLineWidth(8.0);
         glBegin(GL_LINES);
-        glVertex2f(vPts[ vLines[i].pts[0] ].x, vPts[ vLines[i].pts[0] ].y);
-        glVertex2f(vPts[ vLines[i].pts[1] ].x, vPts[ vLines[i].pts[1] ].y);
+        glVertex2i(vPts[ vLines[i].pts[0] ].x, vPts[ vLines[i].pts[0] ].y);
+        glVertex2i(vPts[ vLines[i].pts[1] ].x, vPts[ vLines[i].pts[1] ].y);
         glEnd();
     }
 
     // if in drawing state, draw the current line too
-    if (lmbDown == 1)
-    {
+    if (lmbDown == 1) {
         glColor3f(0.0, 0.0, 0.0);
+        glLineWidth(8.0);
         glBegin(GL_LINES);
-        glVertex2f(tmpPts[0].x, tmpPts[0].y);
-        glVertex2f(tmpPts[1].x, tmpPts[1].y);
+        glVertex2i(tmpPts[0].x, tmpPts[0].y);
+        glVertex2i(tmpPts[1].x, tmpPts[1].y);
         glEnd();
     }
-
     glutSwapBuffers();
 }
 
@@ -130,60 +198,34 @@ void mouse(int button, int state, int x, int y)
     if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN)
     {
         lmbDown = 1;
-        win2world(oldPos, x, y);
-        tmpPts[0].x = oldPos[0];
-        tmpPts[0].y = oldPos[1];
-        tmpPts[1].x = oldPos[0];
-        tmpPts[1].y = oldPos[1];
+        tmpPts[0].x = x;
+        tmpPts[0].y = winHeight-y;
+        tmpPts[1].x = x;
+        tmpPts[1].y = winHeight-y;
+
     }
     else if (button == GLUT_LEFT_BUTTON && state == GLUT_UP)
     {
         // store the new line
         lmbDown = 0;
-        win2world(newPos, x, y);
         vPts.push_back( tmpPts[0] );
         vPts.push_back( tmpPts[1] );
         vLines.push_back( CLine(vPts.size()-2, vPts.size()-1) );
         glutPostRedisplay();
     }
-        // right button down - moving mode
-    else if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN)
-    {
-        rmbDown = 1;
-        win2world(oldPos, x, y);
-        // set the vertex to edit
-        dragging = hover;
-    }
-    else if (button == GLUT_RIGHT_BUTTON && state == GLUT_UP)
-    {
-        rmbDown = 0;
-        win2world(newPos, x, y);
-        // end dragging
-        dragging = -1;
-    }
+
 }
 
 // mouse move event handler
 void motion(int x, int y)
 {
     float tempPos[2];
-    win2world(tempPos, x, y);
-
 
     if (lmbDown == 1)
     {
         // left mouse button down - drawing mode
-        tmpPts[1].x = tempPos[0];
-        tmpPts[1].y = tempPos[1];
-    }
-    else if (rmbDown == 1)
-    {
-        // right mouse button down - moving mode
-        if (dragging != -1)
-        {
-            vPts[dragging].x = tempPos[0];
-            vPts[dragging].y = tempPos[1];
-        }
+        tmpPts[1].x = x;
+        tmpPts[1].y = winHeight-y;
     }
 
     glutPostRedisplay();
@@ -191,17 +233,17 @@ void motion(int x, int y)
 
 void pmotion( int x, int y )
 {
-    float tempPos[2];
+
     bool bFound = false;
 
-    win2world(tempPos, x, y);
+
     for (int i=0; i<vPts.size(); i++)
     {
 
-        if ( (tempPos[0]-vPts[i].x<3./winWidth
-              && tempPos[0]-vPts[i].x>-3./winWidth)
-             && (tempPos[1]-vPts[i].y<3./winHeight
-                 && tempPos[1]-vPts[i].y>-3./winHeight) )
+        if ( (x-vPts[i].x<3./winWidth
+              && x-vPts[i].x>-3./winWidth)
+             && (y-vPts[i].y<3./winHeight
+                 && y-vPts[i].y>-3./winHeight) )
         {
             hover = i;
             bFound = true;
