@@ -38,7 +38,7 @@ int winpoints[2];
 
 vector<CPoint> visited;
 vector<CPoint> ptstack;
-
+vector<CPoint> mazePt;
 // keep track of the active anchor
 int hover = -1, dragging = -1;
 char keypress = NULL;
@@ -94,9 +94,10 @@ void drawMaze(CPoint start, vector<CPoint> cells, int offset){
     glVertex2f(start.x,start.y);
     glEnd();
 
-    for(auto p: cells){
+    for(auto &p: cells){
         if(p.x == start.x && p.y == start.y){
             p.visited = 1;
+            start = p;
         }
     }
     CPoint top;
@@ -132,20 +133,32 @@ void drawMaze(CPoint start, vector<CPoint> cells, int offset){
         if(pt.visited == 0)
             notvisited.push_back(pt);
     }
-    //random number
+
     if(!notvisited.empty()){
         int dir = rand() % (int)(notvisited.size());
+        ptstack.push_back(start);
+        for(auto d:notvisited){
+            d.visited = 1;
+        }
+        drawMaze(notvisited[dir],cells,offset);
     } else if(!ptstack.empty()){
-
+        CPoint pt = ptstack.back();
+        mazePt.push_back(pt);
+        ptstack.pop_back();
+        drawMaze(pt,cells,offset);
     }
 
-
-
-
-
-
-
-
+}
+//TODO this only a rectangular cells, need to work on a different approach.
+vector<CPoint> initCells(int x, int y, int offset){
+    vector<CPoint> cells;
+    int j,i;
+    for(j=0;j<=y;j+=offset){
+        for(i=0;i<=x;i+=offset){
+            cells.push_back(CPoint(i,j,0));
+        }
+    }
+    return cells;
 }
 // Main drawing routine. Called repeatedly by GLUT's main loop
 void display( void )
@@ -164,7 +177,18 @@ void display( void )
                     NULL,
                     0);
             keypress = NULL;
+
+
+        case 'f':
+            vector<CPoint> cells;
+            cells = initCells(winWidth,winHeight,8);
+            for(auto c: cells){
+                printf("%d, %d\n",c.x,c.y);
+            }
+            drawMaze(CPoint(0,0),cells,8);
+
     }
+
     for (int i=0; i<vLines.size(); i++)
     {
         // draw lines

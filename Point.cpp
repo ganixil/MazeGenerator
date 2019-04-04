@@ -10,7 +10,7 @@ CPoint::CPoint(int x, int y)
 	this->x = x;
 	this->y = y;
 }
-CPoint::CPoint(int x, int y)
+CPoint::CPoint(int x, int y, int visited)
 {
 	this->x = x;
 	this->y = y;
