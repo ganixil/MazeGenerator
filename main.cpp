@@ -28,17 +28,17 @@ FILE* image;
 int lmbDown = 0;
 int rmbDown = 0;
 
-float oldPos[2], newPos[2];
-float worldPos[2];
+
 // vertex and line list
 vector<CPoint> vPts;
 vector<CLine> vLines;
+vector<CPoint> polygonPt;
+vector<vector<CPoint>> polygon;
 CPoint tmpPts[2];
-int winpoints[2];
 
-vector<CPoint> visited;
+
 vector<CPoint> ptstack;
-vector<CPoint> mazePt;
+vector<CLine> mazeRoute;
 // keep track of the active anchor
 int hover = -1, dragging = -1;
 char keypress = NULL;
@@ -60,7 +60,6 @@ void init( void )
 void getPixel(int x, int y, GLfloat *color){
     glReadPixels(x,y,1,1,GL_RGB,GL_FLOAT,color);
 }
-
 vector<int> check_surrending(int x, int y){
     vector<int> unvisited;
     int up=1, down=2, left=3, right=4;
@@ -87,13 +86,6 @@ vector<int> check_surrending(int x, int y){
     }
 }
 void drawMaze(CPoint start, vector<CPoint> cells, int offset){
-
-    glColor3f(0.0,0.0,0.0);
-    glPointSize(8.0);
-    glBegin(GL_POINTS);
-    glVertex2f(start.x,start.y);
-    glEnd();
-
     for(auto &p: cells){
         if(p.x == start.x && p.y == start.y){
             p.visited = 1;
@@ -104,109 +96,125 @@ void drawMaze(CPoint start, vector<CPoint> cells, int offset){
     CPoint down;
     CPoint left;
     CPoint right;
-    for(auto p: cells){
+    vector<CPoint> fourdir;
+    for(auto &p: cells){
         //top
         if(p.x == start.x && p.y == (start.y) + offset){
             top = p;
+            fourdir.push_back(top);
         }
         //down
         if(p.x == start.x && p.y == (start.y) - offset){
             down = p;
+            fourdir.push_back(down);
         }
         //left
         if(p.x == (start.x)-offset && p.y == start.y){
             left = p;
+            fourdir.push_back(left);
         }
         //right
         if(p.x == (start.x)+offset && p.y == start.y){
             right = p;
+
+            fourdir.push_back(right);
         }
     }
-    vector<CPoint> fourdir;
-    fourdir.push_back(top);
-    fourdir.push_back(down);
-    fourdir.push_back(left);
-    fourdir.push_back(right);
 
     vector<CPoint> notvisited;
-    for(auto pt: fourdir){
+    for(auto &pt: fourdir){
         if(pt.visited == 0)
             notvisited.push_back(pt);
     }
 
     if(!notvisited.empty()){
-        int dir = rand() % (int)(notvisited.size());
+        int dir = (int)(notvisited.size() * rand() / RAND_MAX);
         ptstack.push_back(start);
-        for(auto d:notvisited){
-            d.visited = 1;
-        }
+        mazeRoute.push_back(CLine(start,notvisited[dir]));
         drawMaze(notvisited[dir],cells,offset);
     } else if(!ptstack.empty()){
         CPoint pt = ptstack.back();
-        mazePt.push_back(pt);
         ptstack.pop_back();
         drawMaze(pt,cells,offset);
     }
 
 }
-//TODO this only a rectangular cells, need to work on a different approach.
-vector<CPoint> initCells(int x, int y, int offset){
+vector<CPoint> initCells(vector<CPoint> polygonShape, int offset){
     vector<CPoint> cells;
-    int j,i;
-    for(j=0;j<=y;j+=offset){
-        for(i=0;i<=x;i+=offset){
-            cells.push_back(CPoint(i,j,0));
+    //find bound box for polygons, currently only works for convex
+    int l = winWidth ,r =0 ,t= 0,d = winHeight;
+    for(auto &pt: polygonShape){
+        if(pt.x >= r){
+            r = pt.x;
+        }
+        if(pt.y >= t){
+            t = pt.y;
+        }
+    }
+    for(auto &pt: polygonShape){
+        if(pt.x < l){
+            l = pt.x;
+        }
+        if(pt.y < d){
+            d = pt.y;
+        }
+    }
+
+    int m,n;
+    for(int j = d; j<= t;j+=offset){
+        for(int i= l;i<= r;i+=offset){
+            for(m=0,n=(int)polygonShape.size()-1;m<polygonShape.size();n=m++)
+            {
+                if((polygonShape[m].y > j) != (polygonShape[n].y>j) && ( i < (polygonShape[n].x - polygonShape[m].x)*(j - polygonShape[m].y)/(polygonShape[n].y - polygonShape[m].y)+polygonShape[m].x)){
+                    cells.push_back(CPoint(i,j,0));
+                }
+            }
         }
     }
     return cells;
 }
+
 // Main drawing routine. Called repeatedly by GLUT's main loop
 void display( void )
 {
     //Clear the screen and set our initial view matrix
     glClear(GL_COLOR_BUFFER_BIT);
 
-
-    switch(keypress){
-        case 'n':
-            lTheOpenFileName = tinyfd_openFileDialog(
-                    "Please choose a BMP file",
-                    "",
-                    2,
-                    lFilterPatterns,
-                    NULL,
-                    0);
-            keypress = NULL;
-
-
-        case 'f':
-            vector<CPoint> cells;
-            cells = initCells(winWidth,winHeight,8);
-            for(auto c: cells){
-                printf("%d, %d\n",c.x,c.y);
-            }
-            drawMaze(CPoint(0,0),cells,8);
-
-    }
-
     for (int i=0; i<vLines.size(); i++)
     {
         // draw lines
         glColor3f(0.0, 0.0, 0.0);
-        glLineWidth(8.0);
+        glLineWidth(1.0);
         glBegin(GL_LINES);
         glVertex2i(vPts[ vLines[i].pts[0] ].x, vPts[ vLines[i].pts[0] ].y);
         glVertex2i(vPts[ vLines[i].pts[1] ].x, vPts[ vLines[i].pts[1] ].y);
         glEnd();
     }
 
+    glColor3f(0.0, 0.0, 0.0);
+    for(int i=0;i<polygon.size();i++){
+        glBegin(GL_POLYGON);
+        for(int j=0;j<polygon[i].size();j++){
+            glVertex2i(polygon[i][j].x,polygon[i][j].y);
+        }
+        glEnd();
+    }
+
     // if in drawing state, draw the current line too
     if (lmbDown == 1) {
         glColor3f(0.0, 0.0, 0.0);
-        glLineWidth(8.0);
+        glLineWidth(1.0);
         glBegin(GL_LINES);
         glVertex2i(tmpPts[0].x, tmpPts[0].y);
         glVertex2i(tmpPts[1].x, tmpPts[1].y);
+        glEnd();
+    }
+    for(auto &l : mazeRoute){
+        glColor3f(1.0,1.0,1.0);
+        glLineWidth(1.0);
+        glBegin(GL_LINES);
+        glVertex2i(l.pt1.x,l.pt1.y);
+        glVertex2i(l.pt2.x,l.pt2.y);
         glEnd();
     }
     glutSwapBuffers();
@@ -234,8 +242,14 @@ void mouse(int button, int state, int x, int y)
         lmbDown = 0;
         vPts.push_back( tmpPts[0] );
         vPts.push_back( tmpPts[1] );
+        polygonPt.push_back(tmpPts[0]);
         vLines.push_back( CLine(vPts.size()-2, vPts.size()-1) );
         glutPostRedisplay();
+    }
+    else if(button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN){
+        polygonPt.push_back(tmpPts[1]);
+        polygon.push_back(polygonPt);
+        polygonPt.clear();
     }
 
 }
@@ -281,10 +295,25 @@ void pmotion( int x, int y )
 }
 void keyboard(unsigned char key, int x, int y){
     if (key == 'n'){
-        keypress='n';
+        lTheOpenFileName = tinyfd_openFileDialog(
+                "Please choose a BMP file",
+                "",
+                2,
+                lFilterPatterns,
+                NULL,
+                0);
+        keypress = NULL;
     }
     else if(key == 'f'){
-        keypress = 'f';
+        vector<CPoint> cells;
+        if(!polygon.empty()) {
+            cells = initCells(polygon[0], 8);
+            int start = (int)(cells.size() * rand() / RAND_MAX);
+            drawMaze(cells[start],cells,8);
+        }
+    }
+    else if(key == 'p'){
+        keypress = 'p';
     }
 }
 // Entry point - GLUT setup and initialization
